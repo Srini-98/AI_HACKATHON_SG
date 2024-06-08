@@ -40,14 +40,16 @@ def debug_on_error(func):
 def main():
     # Model
     load_dotenv(find_dotenv()) # read local .env file
+    assert os.environ["GROQ_API_KEY"]  != ''
     assert os.environ["JIGSAW_API_KEY"]  != ''
     assert os.environ["JIGSAW_PUBLIC_KEY"]  != ''
-    assert os.environ["GROQ_API_KEY"]  != ''
+    assert os.environ["SUPABASE_URL"]  != ''
+    assert os.environ["SUPABASE_KEY"]  != ''
+    assert os.environ["SUPA_BASE_TABLE"]  != ''
 
     # Model
     chat_bot = RecruiterAgent()
     chat_bot.verbose = True
-    # chat_bot.app = chat_bot.setup_agent()
 
     # Gradio Interfaces
     with gr.Blocks() as demo:
@@ -56,7 +58,7 @@ def main():
             input_templates = ["what is the education history ?"]
         with gr.Row():
             with gr.Column():
-                msg = gr.Textbox(label="State your question | get_summary",
+                msg = gr.Textbox(label="State your question | [get_summary] | [match_profiles]",
                                  value='\n\n'.join(input_templates),
                                  max_lines=50, # 20
                                 )
