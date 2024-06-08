@@ -15,6 +15,7 @@ from dotenv import load_dotenv, find_dotenv
 from PIL import Image
 import pandas as pd
 import PyPDF2
+from groq import Groq
 from supabase import create_client # , Client
 
 from langchain_groq import ChatGroq
@@ -87,14 +88,16 @@ class RecruiterAgent():
 
         self.setup_supabase()
 
-        self.warmup()
+        # self.warmup()
 
     def warmup(self, ):
+        print('--- warmup')
         try:
             _resume_parser_test = self.app.invoke({"attachment": 'data/JohnDoeResume.pdf'})
-            _speech_parser_test = self.app.invoke({"attachment": 'data/gettysburg.wav'})
-            _speech_parser_test = self.app.invoke({"question": 'get_summary'})
-            _speech_parser_test = self.app.invoke({"question": 'what is the educationl history ?'})
+            _speech_parser_test = self.app.invoke({"attachment": 'data/Interview.wav'})
+            # pdb.set_trace()
+            # _speech_parser_test = self.app.invoke({"question": 'get_summary'})
+            # _speech_parser_test = self.app.invoke({"question": 'what is the educationl history ?'})
             # pdb.set_trace()
         except:
             traceback.print_exc()
@@ -109,6 +112,7 @@ class RecruiterAgent():
             os.environ.get("SUPABASE_KEY")
         )
         self.table_name = os.environ.get("SUPA_BASE_TABLE")
+        pdb.set_trace()
         data_deleted, count = self.supabase_delete()
         data_created, count = self.supabase_insert_new_record({"id": 1 , "resume_key": "resume_key"})
         return
@@ -172,7 +176,8 @@ class RecruiterAgent():
         Retrieve response from supabase database using the id and self.table_name
         """
         data_retrieved, count = self.supabase_client\
-                                    .table(self.table_name).select('*')\
+                                    .table(self.table_name)\
+                                    .select('*')\
                                     .eq(col_name , col_value)\
                                     .execute()
         return data_retrieved[1][0]
@@ -185,7 +190,6 @@ class RecruiterAgent():
         data_retrieved = data_retrieved[1][0]
         pprint(data_retrieved)
         {
-            'conversation': ['95893583958935'],
             'created_at': '2024-06-08T07:42:49.651779+00:00',
             'id': 1,
             'name': 'JOHN DOE',
@@ -194,7 +198,11 @@ class RecruiterAgent():
                             'Certifications: Salt - SaltStack Certified Engineer, GCP - '
                             'Professional Cloud Architect\n'
                             '\n',
-            'resume_key': 'sample_pdf_JOHN_DOE'}
+            'resume_key': 'sample_pdf_JOHN_DOE'
+            'conversation_key': ['Interview.wav'],
+            'conversation': ['hi there this is leonard ....'],
+            'conversation_keypoints': ['Name:..., Expected Salary: ...'],
+        }
         """
 
     def supabase_update_column(self, col_name, col_value):
@@ -230,7 +238,6 @@ class RecruiterAgent():
         GROQ_LLM = ChatGroq(model=self.model_name,)
         print(f'\tUsing {GROQ_LLM.model_name}')
 
-        from groq import Groq
         GROQ_v2 = Groq(
             api_key=os.environ.get("GROQ_KEY"),
         )
@@ -238,12 +245,7 @@ class RecruiterAgent():
         return GROQ_LLM, GROQ_v2
 
     # ------------------------------------------------------------
-    # Tools
-    def _tool_REPL(self):
-        from langchain_core.tools import Tool
-        from langchain_experimental.utilities import PythonREPL
-        return PythonREPL()
-
+    # Tools (resume)
     def JIGSAW_upload_resume_file(self, resume_file):
         resume_key = os.path.basename(resume_file).replace(' ', '_')
         assert resume_key.endswith('.pdf')
@@ -288,10 +290,12 @@ class RecruiterAgent():
         response = get_response(resume_text)
         display(Markdown(response))
 
+    # ------------------------------------------------------------
+    # Tools (speech)
     def JIGSAW_upload_speech_file(self, speech_file):
         speech_key = os.path.basename(speech_file).replace(' ', '_')
         assert speech_key.endswith('.wav')
-        return speech_key, None
+        # return speech_key, None
         # Define the endpoint and the API key
         #            <                endpoint               >
         #                                                      <      key     >
@@ -320,17 +324,15 @@ class RecruiterAgent():
         return speech_key, data
         {'success': True, 'url': 'https://api.jigsawstack.com/v1/store/file/gettysburg.wav', 'key': 'gettysburg.wav'}
 
-    def JIGSAW_transcribe_file(self, speech_key):
+    def JIGSAW_transcribe_file_v2(self):
         return {
             'success': True,
-            'text': ' four score and seven years ago our fathers brought forth on this continent a new nation conceived in liberty and dedicated to the proposition that all men are created equal now we are engaged in a great civil war testing whether that nation or any nation so conceived and so dedicated can long endure',
+            'text': """Hi, my name is Leonard and I'm a recruiter for Good Talent Company. Hi Leonard, my name is John Doe. Hi, so I just want to run some questions through you. So may I know what's your gender? Yeah, I'm a male and I'm 26. What languages do you speak? I speak English and Mandarin. And which country are you residing in? I moved to Singapore 4 years back and I'm you residing in uh actually i moved to singapore four years back and i'm currently residing in singapore yeah okay thanks for that uh do you require a visa sponsorship uh yes yeah i do need it yeah i'm currently on an employment pass so yeah in even in the future i would need one yeah okay thanks for that uh what is your current notice period What is your current notice period? My current notice period is one month. Why are you looking out for a new job? I feel like I would like to have some better career growth opportunities and a bit more of learning as well in my current role. Good, that's great. Can you elaborate more in detail what are you looking out for in the next role? Yeah, so I would actually like to work in a in a team which has very good engineering culture where there's a lot of feedback loops from like senior engineers as well about programming and stuff like and maintaining a very good work culture and And there's an environment where like I get to learn new technological stacks as well. Interesting. Okay, so currently do you have any other interviews right now? Yeah, so as you know I am actually interviewing with two other companies, Tech Solutions and DataCorp. Okay, so what are you currently drawing now for your salary? Oh yeah, so mine is approximately $80,000 per year without the bonus and one year month-on-month bonus based on performance. Okay, what is your expected salary? Yeah, I would actually, based on the current industry trends, I would like my current salary to be around 100,000 Singapore dollars a year. Okay, sure. So, just to fill out some of the background check, may I know what's your identity number? Yeah, so my number is G1234567N. Okay. Will you be open to a consulting model? Yeah, definitely. Yeah. Okay. okay currently how many leave do you have oh yeah so I have 18 days of holiday leave and 30 days of sick leave yeah have you worked for this company good startup before no I haven't there's the first time I'm in fact up like okay okay so yeah I would like to I think that you're a good match so I would like to recommend that for you. So any final comments? Actually I'm highly motivated and I feel like I would be a perfect fit for this company because I've looked at some of your teams and the kind of work that they do. So I'm definitely interested in interviewing for this particular role. Okay thank you very much. I appreciate your time. I'll let you know if I have any updates for you. Yeah sure thank you and I look forward to hearing from you.
+            """,
             'chunks': [
-                {
-                    'timestamp': [0, 17.58],
-                    'text': ' four score and seven years ago our fathers brought forth on this continent a new nation conceived in liberty and dedicated to the proposition that all men are created equal now we are engaged in a great civil war testing whether that nation or any nation so conceived and so dedicated can long endure'
-                }
             ]
         }
+    def JIGSAW_transcribe_file(self, speech_key):
         # Define the endpoint and the API key
         endpoint = "https://api.jigsawstack.com/v1/ai/transcribe"
         print(f"\tendpoint = {endpoint}")
@@ -344,10 +346,13 @@ class RecruiterAgent():
         # Define the body of the request
         body = {
             "file_store_key": speech_key,
+            "language": "en",
+            "translate":True,
         }
         print(f"\tbody = {body}")
 
         # Make the POST request
+        print(f"\tRunning real tanscription now")
         response = requests.post(endpoint,
                                 headers=headers,
                                 data=json.dumps(body)
@@ -375,13 +380,16 @@ class RecruiterAgent():
         speech_key, data_upload = self.JIGSAW_upload_speech_file(speech_file)
 
         # transcribe
+        print(f'speech_key = {speech_key}')
+        if speech_key == 'Interview.wav':
+            speech_transcribed = self.JIGSAW_transcribe_file_v2()
         speech_transcribed = self.JIGSAW_transcribe_file(speech_key)
         return speech_key, speech_transcribed
 
+    # ------------------------------------------------------------
+    # Tools
     def setup_tools(self):
-        self.python_repl_tool = self._tool_REPL()
         return
-        self.python_repl.run("print(1+1)")
 
     def invoke_with_retry(self, chain, input_data, max_retries=3):
         for attempt in range(max_retries):
@@ -408,95 +416,8 @@ class RecruiterAgent():
 
     # ------------------------------------------------------------
     # Chains
-    def _chain_resume_parser(self, ):
+    def _chain_resume_parser(self, resume_text):
         print('\t _chain_resume_parser')
-        prompt = PromptTemplate(
-            template="""
-<|begin_of_text|><|start_header_id|>system<|end_header_id|>
-You are a smart resume summary agent assistant
-
-<|eot_id|>
-<|start_header_id|>user<|end_header_id|>
-You will be given a resume and you need to split it into different sections like education, experience, skills, etc.
-The resume is given below:\n\n{resume_text} 
-
-<|eot_id|>
-<|start_header_id|>assistant<|end_header_id|>
-            """.strip(' \n'),
-            input_variables=["resume_text"],
-        )
-
-        resume_parser_chain = prompt | self.GROQ_LLM | StrOutputParser()
-        if 0: # inference first pass
-            question = "Janet’s ducks lay 16 eggs per day. She eats three for breakfast every morning and bakes muffins for her friends every day with four. She sells the remainder at the farmers' market daily for $2 per fresh duck egg. How much in dollars does she make every day at the farmers' market?"
-            expected_answer = 18
-            inputs = {"question": question, "num_steps": 0}
-            answer_json = self.invoke_with_retry(resume_parser_chain, inputs)
-            print(f"answer_json = {answer_json}")
-            print(f"expected_answer = {expected_answer}")
-            pdb.set_trace()
-        return resume_parser_chain
-    def _chain_resume_parser_v2(self, resume_text):
-        print('\t _chain_resume_parser_v2')
-        return """
-Contact Information
-
-Name: John Doe
-Address: Simei Street 1, (520133)
-Email: John_Doe@hotmail.com
-LinkedIn: https://www.linkedin.com/in/john-doe-840510214
-Summary of Qualifications
-
-Experienced in designing solutions for environmental problems
-Proficient in various modeling and drafting software
-Efficiently manages projects and collaborates with teams
-Education
-
-Institution: Southeastern Louisiana University, Hammond, LA
-Degree: Bachelor of Science in Engineering Technology, Concentration: Electrical Energy Engineering
-Graduation Date: May 2024
-Cumulative GPA: 3.75/4.00
-Relevant Coursework:
-Introduction to Programming
-Electrical Circuits
-Electromagnetics
-Programming for Technologists
-Technical Proficiencies
-
-Modeling Programs:
-ALGOR
-eQUEST
-EnergyPro (LEED project with a VRF system)
-Drafting Software:
-AutoCAD
-AutoCAD LT
-Experience
-
-American Pollution Control Corp., Environmental Engineering Intern, Chalmette, LA (June 2023 - August 2023)
-Inspected sites and performed detailed monitoring of industrial pollution control measures
-Served on a committee dedicated to designing and implementing a new wastewater treatment system
-Investigated environmental projects onsite with a team of 3 engineers
-Cargill, Engineer Intern, Breaux Bridge, LA (May 2022 - August 2022)
-Researched building code items, materials, and similar building plans for 2 large commercial projects in New Orleans
-Reviewed building plans with engineering and design teams to evaluate for ADA compliance
-Collaborated with a team of 7 to research and identify suitable locations to install groundwater dams
-Project Experience
-
-Group Project, Senior Design Course, Hammond, LA (January - March 2023)
-Collaborated with a 5-person team to develop an action plan for addressing societal, environmental, regulatory, and economic constraints related to a local wastewater project
-Researched client needs and developed a solutions-based layout to best suit functionality requirements
-Served as project leader by organizing team meetings, tracking progress, and providing a forum for discussion
-Memberships and Associations
-
-The National Association of Environmental Professionals, Baton Rouge, LA (January 2020 - Present)
-Louisiana Association of Environmental Professionals (LAEP), Baton Rouge, LA (August 2020 - Present)
-Campus Involvement
-
-Co-Captain, SLU Tennis Team, Hammond, LA (August 2020 - May 2023)
-Member, Beta Gamma Sigma, SLU, Hammond, LA (December 2019 - December 2020)
-
-"""
-        
         schema = {
             "type":"object",
             "properties": {
@@ -579,17 +500,103 @@ Return a JSON object with the following schema:
 
         return st
 
-    def _chain_speech_parser(self, ):
+    def _chain_speech_parser(self, speech_transcribed):
         print('\t _chain_speech_parser')
-        prompt = PromptTemplate(
-            template="""
-<|begin_of_text|><|start_header_id|>system<|end_header_id|>
+        print(f'\t speech_transcribed = {speech_transcribed}')
+
+        schema = {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "The name of the candidate"
+                },
+                "spoken_languages": {
+                    "type": "list",
+                    "items": {
+                        "type": "string"
+                    },
+                    "description": "All the languages the candidate can speak in"
+                },
+                "country_residence": {
+                    "type": "string",
+                    "description": "Which country the candidate is residing at now"
+                },
+                "work_pass_type": {
+                    "type": "string",
+                    "description": "The type of work pass the candidate has (choose from 'visa', 'permanent_resident', 'citizen', 'not mentioned')"
+                },
+                "nationality": {
+                    "type": "string",
+                    "description": "The candidate's nationality"
+                },
+                "notice_period": {
+                    "type": "string",
+                    "description": "The amount of notice the candidate needs to give their current employer"
+                },
+                "reason_for_looking_out": {
+                    "type": "string",
+                    "description": "Why the candidate is seeking a new job"
+                },
+                "looking_for_in_next_move": {
+                    "type": "string",
+                    "description": "What the candidate is seeking in their next job/company"
+                },
+                "other_interviews_in_pipeline": {
+                    "type": "string",
+                    "description": "Other companies the candidate is interviewing with"
+                },
+                "current_salary": {
+                    "type": "string",
+                    "description": "The candidate's current salary"
+                },
+                "expected_salary": {
+                    "type": "string",
+                    "description": "The salary the candidate is seeking"
+                },
+                "identity_number": {
+                    "type": "string",
+                    "description": "The candidate's NRIC, FIN, or Passport number (for permanent roles only)"
+                },
+                "open_to_consulting_model": {
+                    "type": "string",
+                    "description": "Whether the candidate is open to a consulting arrangement (for contract roles only)"
+                },
+                "current_annual_leave_days": {
+                    "type": "string",
+                    "description": "The candidate's current number of annual leave days (for contract roles only)"
+                },
+                "worked_for_client_before": {
+                    "type": "string",
+                    "description": "Whether the candidate has worked for the client company before ('yes' or 'no')"
+                },
+                "general_notes": {
+                    "type": "string",
+                    "description": "Any other relevant / miscellanous information about the candidate"
+                }
+            }
+        }
+
+        chat_completion = self.GROQ_v2.chat.completions.create(
+            messages=[
+                {
+                    "role": "system",
+                    "content": f"""
 You are an AI assistant that specializes in summarizing conversations and extracting key information.
 You will be provided with the transcript of an audio conversation between a job candidate and a recruiter or hiring manager.
 Your task is to analyze the transcript, summarize the main points, and extract specific pieces of information about the candidate.
 
-<|eot_id|>
-<|start_header_id|>user<|end_header_id|>
+If the information is not present, just mention that the information is not available.
+
+Return a JSON object with the following schema: 
+```
+{schema}
+```
+                    """,
+                },
+                {
+                    "role": "user",
+                    "content": f"""
 Here is the transcript:
 
 <transcript>
@@ -597,94 +604,26 @@ Here is the transcript:
 </transcript>
 
 Based on the content of the transcript, please extract the following information about the job candidate:
-
-- Name: The candidate's name 
-- Gender: The candidate's gender (either 'male' or 'female' only)
-- Languages: A list of the languages the candidate speaks
-- Country: The country the candidate is currently residing in
-- Work Pass Type: The type of work pass the candidate has (e.g. visa, permanent residency)  
-- Nationality: The candidate's nationality
-- Notice Period: The amount of notice the candidate needs to give their current employer
-- Reason for looking out: Why the candidate is seeking a new job
-- Looking for in next move: What the candidate is seeking in their next job/company
-- Other Interviews in pipeline: Other companies the candidate is interviewing with
-- Current Salary: The candidate's current salary 
-- Expected Salary: The salary the candidate is seeking
-- Identity: The candidate's NRIC, FIN, or Passport number (for permanent roles only)
-- Open to Consulting model: Whether the candidate is open to a consulting arrangement (for contract roles only)
-- Current Annual Leave days: The candidate's current number of annual leave days (for contract roles only)
-- Worked for Client Before or no: Whether the candidate has worked for the client company before (for contract roles only)
-- Hiring for other roles?: Whether the candidate is also hiring for other roles at their current company
-- General Notes: Any other relevant information about the candidate
-
-If any of the above information is not available in the transcript, set the value to null.
-
-Please provide your output in valid JSON format, like this:
-
-<json>
-{{
-  "Name": "John Smith",
-  "Gender": "male",
-  "Languages": ["English", "Spanish"],
-  "Country": "United States",
-  "Work Pass Type": null,
-  "Nationality": "American",
-  "Notice Period": "2 weeks",
-  "Reason for looking out": "Seeking new challenges and growth opportunities",
-  "Looking for in next move": "A dynamic, fast-paced work environment",
-  "Other Interviews in pipeline": ["ABC Corp", "XYZ Inc"],
-  "Current Salary": null, 
-  "Expected Salary": "$80,000",
-  "Identity": null,
-  "Open to Consulting model": null,
-  "Current Annual Leave days": null,
-  "Worked for Client Before or no": null,
-  "Hiring for other roles?": "Yes, also hiring for sales and marketing roles",
-  "General Notes": "Very enthusiastic and driven candidate"
-}}
-</json>
-
 Carefully review the transcript and extract as much of the requested information as possible.
-Remember, if a piece of information is not available, set the value to null.
-Provide your final output in valid JSON format.
-
-<|eot_id|>
-<|start_header_id|>assistant<|end_header_id|>
-            """.strip(' \n'),
-            input_variables=["speech_transcribed"],
+                    """,
+                }
+            ],
+            model=self.model_name, # "llama3-70b-8192", 
+            response_format={"type": "json_object"}
         )
 
-        speech_parser_chain = prompt | self.GROQ_LLM | StrOutputParser()
-        if 0: # inference first pass
-            question = "Janet’s ducks lay 16 eggs per day. She eats three for breakfast every morning and bakes muffins for her friends every day with four. She sells the remainder at the farmers' market daily for $2 per fresh duck egg. How much in dollars does she make every day at the farmers' market?"
-            expected_answer = 18
-            inputs = {"question": question, "num_steps": 0}
-            answer_json = self.invoke_with_retry(speech_parser_chain, inputs)
-            print(f"answer_json = {answer_json}")
-            print(f"expected_answer = {expected_answer}")
-            pdb.set_trace()
-        return speech_parser_chain
-    def _chain_speech_parser_v2(self, input):
-        print('\t _chain_speech_parser')
-        return """<json>
-- Name: John Doe 
-- Gender: Male
-- Languages: English
-- Country: US
-- Work Pass Type: visa
-- Nationality: American
-- Notice Period: 1 month
-- Reason for looking out: find new opportunities
-- Looking for in next move: promotion
-- Other Interviews in pipeline: 2 other in final stage
-- Current Salary: 100k 
-- Expected Salary: 200k
-- Identity: s123123d
-- Open to Consulting model: no
-- Current Annual Leave days: 19
-- Worked for Client Before or no: no
-</json>
-"""
+        output = chat_completion.choices[0].message.content
+
+        #process output as dict \
+        try:
+            output_dict = eval(output)
+        except:
+            output_dict = json.loads(output)
+        output_str = "<json>\n"
+        for key, value in output_dict.items():
+            output_str += f"{key}: {value} \n"
+        output_str += "</json>\n"
+        return output_str
 
     def _chain_question_answering(self, ):
         print('\t _chain_question_answering')
@@ -726,19 +665,12 @@ Finally, say: the above analysis of scratchpad and results is done
 
         question_answering_chain = prompt | self.GROQ_LLM | StrOutputParser()
         return question_answering_chain
-    def _chain_question_answering_v2(self, input):
-        return "<result>[your question is answered correcty]</result>"
 
     def setup_chains(self, ):
         print('\n--- setup_chains')
-        # self.resume_parser_chain = self._chain_resume_parser()
-        self.resume_parser_chain_v2 = self._chain_resume_parser_v2
-        # self.speech_parser_chain = self._chain_speech_parser()
-        self.speech_parser_chain = self._chain_speech_parser_v2
-        # self.question_answering_chain = self._chain_question_answering()
-        self.question_answering_chain = self._chain_question_answering_v2
-        # self. xxx _chain = self._chain_ xxx ()
-        # self. xxx _chain = self._chain_ xxx ()
+        self.resume_parser_chain = self._chain_resume_parser
+        self.speech_parser_chain = self._chain_speech_parser
+        self.question_answering_chain = self._chain_question_answering()
         return
 
     # ------------------------------------------------------------
@@ -755,7 +687,7 @@ Finally, say: the above analysis of scratchpad and results is done
         elif question=='get_summary':
             intent = "get_summary"
         else:
-            # intent = self.replan_code_chain.invoke({"question": question,})
+            #  intent = self.replan_code_chain.invoke({"question": question,})
             intent = "ask_question"
 
         if self.verbose: print(f"\t intent = {intent}")
@@ -771,8 +703,7 @@ Finally, say: the above analysis of scratchpad and results is done
         print(f'\tUploaded resume from {resume_path}')
         resume_text, resume_key = self.resume_parser_tool(resume_path)
         input_data = {"resume_text": resume_text}
-        # resume_content = self.resume_parser_chain.invoke(input_data)
-        resume_content = self.resume_parser_chain_v2(input_data['resume_text'])
+        resume_content = self.resume_parser_chain(input_data['resume_text'])
         print(f'\tresume_content = ')
         print(resume_content)
         self.state['resume_content'] = resume_content
@@ -827,8 +758,7 @@ Finally, say: the above analysis of scratchpad and results is done
         print(speech_transcribed)
 
         input_data = {"speech_transcribed": speech_transcribed}
-        # speech_keypoints = self.speech_parser_chain.invoke(input_data)
-        speech_keypoints = self.speech_parser_chain(input_data)
+        speech_keypoints = self.speech_parser_chain(input_data['speech_transcribed'])
         print(f'\tspeech_keypoints = ')
         print(speech_keypoints)
         speech_keypoints = self.process_xml_tags(speech_keypoints, tag='json')
@@ -904,8 +834,7 @@ Finally, say: the above analysis of scratchpad and results is done
         input_data = {"question": question,
                       "context": RAG_context,
                      }
-        # answer_scratchpad_result = self.question_answering_chain.invoke(input_data)
-        answer_scratchpad_result = self.question_answering_chain(input_data)
+        answer_scratchpad_result = self.question_answering_chain.invoke(input_data)
 
         # Parse answer
         answer = self.process_xml_tags(answer_scratchpad_result, tag='result')
