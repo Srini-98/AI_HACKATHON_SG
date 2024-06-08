@@ -1,6 +1,10 @@
 import os
 from supabase import create_client , Client
 import supabase
+from groq import Groq
+from hyde import generate_job_description
+from openai import OpenAI
+import os 
 
 def setup():
     client = create_client(
@@ -8,8 +12,6 @@ def setup():
         os.environ.get("SUPABASE_KEY")
     )
     return client
-
-from groq import Groq
 
 def retrieve_response(col_name: str , table_name: str , client , col_value):
     """
@@ -135,16 +137,36 @@ def get_response(resume , file_name):
     }
 
     #delete the previous record with the same id
-    data, count = supabase_client.table(table_name).delete().eq('id', 1).execute()
+    # data, count = supabase_client.table(table_name).delete().eq('id', 1).execute()
 
-    #insert the new record
-    data, count = supabase_client.table(table_name).insert(response).execute()
+    # #insert the new record
+    # data, count = supabase_client.table(table_name).insert(response).execute()
     
     #retrieve the response from the database
-    print("retrieve response")
-    data_retrieved = retrieve_response(col_name='id' , table_name=table_name , client=supabase_client , col_value=1)
+    # print("retrieve response")
+    # data_retrieved = retrieve_response(col_name='id' , table_name=table_name , client=supabase_client , col_value=1)
     
     #get conversation from the response
-    conversation = data_retrieved[1][0]['conversation'] 
+    # conversation = data_retrieved[1][0]['conversation'] 
     
-    return st
+    job_description = generate_job_description(st)
+
+    api_key = os.environ.get("OPENAI_API_KEY")
+    OpenAIclient = OpenAI(api_key=api_key)
+    
+    response = OpenAIclient.embeddings.create(
+    input= job_description,
+    model="text-embedding-3-small"
+    )
+    embedding = response.data[0].embedding
+
+    output = supabase_client.rpc('match_documents' ,{ "query_embedding" : embedding,
+    "match_threshold" : 0.3, 
+    "match_count" : 5, 
+    }).select('*').execute()
+
+    reco = ""
+    for i in output.data:
+        reco = reco + i['content'] + "\n\n****************************************************************\n\n"
+
+    return reco
