@@ -11,6 +11,20 @@ def setup():
 
 from groq import Groq
 
+def retrieve_response(col_name: str , table_name: str , client , col_value):
+    """
+    Retrieve response from supabase database using the id and table_name
+    """    
+    data, count = client.table(table_name).select('*').eq(col_name , col_value).execute()
+    return data
+
+def update_response(col_name , col_value ,  table_name: str , client):
+    """
+    Update response in the supabase database using the id and table_name
+    """
+    data, count = client.table(table_name).update({col_name : col_value}).eq('id', 1).execute()
+    return data
+
 def get_response(resume , file_name):
     """
     resume : text of resume
@@ -121,9 +135,16 @@ def get_response(resume , file_name):
     }
 
     #delete the previous record with the same id
-    data, count = supabase.table(table_name).delete().eq('id', 1).execute()
+    data, count = supabase_client.table(table_name).delete().eq('id', 1).execute()
 
     #insert the new record
     data, count = supabase_client.table(table_name).insert(response).execute()
+    
+    #retrieve the response from the database
+    print("retrieve response")
+    data_retrieved = retrieve_response(col_name='id' , table_name=table_name , client=supabase_client , col_value=1)
+    
+    #get conversation from the response
+    conversation = data_retrieved[1][0]['conversation'] 
     
     return st
