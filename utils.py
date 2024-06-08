@@ -118,7 +118,6 @@ class RecruiterAgent():
         self.supabase_update_column(col_name="resume_content", col_value="Name: JOHN DOE")
         self.supabase_update_column(col_name="conversation_key", col_value=["call_v1.wav"])
         self.supabase_update_column(col_name="conversation", col_value=["hello"])
-
     def supabase_delete(self, ):
         # delete the previous record with the same id
         data, count = self.supabase_client\
@@ -148,7 +147,6 @@ class RecruiterAgent():
             ]
             )
         """
-
     def supabase_insert_new_record(self, response_dict):
         """
         response_dict = {
@@ -789,6 +787,35 @@ Finally, say: the above analysis of scratchpad and results is done
                 "resume_key": resume_key,
         }
 
+    def update_conversation(self, speech_key, speech_transcribed, speech_keypoints):
+        data_retrieved = self.supabase_retrieve()
+
+        conversation_key_lst = data_retrieved.get('conversation_key')
+        if conversation_key_lst is None:
+            conversation_key_lst=[]
+        conversation_key_lst.append(speech_key)
+
+        conversation_lst = data_retrieved.get('conversation')
+        if conversation_lst is None:
+            conversation_lst=[]
+        conversation_lst.append(speech_transcribed)
+
+        conversation_keypoints_lst = data_retrieved.get('conversation_keypoints')
+        if conversation_keypoints_lst is None:
+            conversation_keypoints_lst=[]
+        conversation_keypoints_lst.append(speech_keypoints)
+
+        self.supabase_update_column(col_name="conversation_key", col_value=conversation_key_lst)
+        self.supabase_update_column(col_name="conversation", col_value=conversation_lst)
+        self.supabase_update_column(col_name="conversation_keypoints", col_value=conversation_keypoints_lst)
+
+        # pprint(data_retrieved)
+        # pdb.set_trace()
+        data_retrieved = self.supabase_retrieve()
+        pprint(data_retrieved)
+        # pdb.set_trace()
+        return
+
     def _node_speech_parser(self, state):
         speech_path = state['attachment']
         print(f'\tUploaded speech from {speech_path}')
@@ -810,8 +837,8 @@ Finally, say: the above analysis of scratchpad and results is done
         self.state['speech_keypoints'] = speech_keypoints
 
         # supabase
-        self.supabase_update_column(col_name="conversation_key", col_value=[speech_key])
-        self.supabase_update_column(col_name="conversation", col_value=[speech_transcribed])
+        self.update_conversation(speech_key, speech_transcribed, speech_keypoints)
+
         return {
             "attachment": speech_path,
                 "speech_transcribed": speech_transcribed,
