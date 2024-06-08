@@ -15,6 +15,7 @@ from dotenv import load_dotenv, find_dotenv
 from PIL import Image
 import pandas as pd
 import PyPDF2
+from supabase import create_client # , Client
 
 from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
@@ -66,17 +67,6 @@ class GraphState(TypedDict):
     answer: str
     # aggregate: Annotated[list, operator.add] # for multiple connections to/from nodes
 
-# ------------------------------------------------------------
-def debug_on_error(func):
-    @functools.wraps(func)
-    def wrapper(*args, **kwargs):
-        try:
-            return func(*args, **kwargs)
-        except:
-            traceback.print_exc()
-            exc_type, exc_value, exc_traceback = sys.exc_info()
-            pdb.post_mortem(exc_traceback)
-    return wrapper
 
 class RecruiterAgent():
     def __init__(self) -> None:
@@ -84,7 +74,7 @@ class RecruiterAgent():
         self.dummy_data = {}
         self.state = {}
 
-        self.GROQ_LLM = self.load_llm_model()
+        self.GROQ_LLM, self.GROQ_v2 = self.load_llm_model()
         self.JIGSAW_API_KEY = os.environ["JIGSAW_API_KEY"]
         self.JIGSAW_PUBLIC_KEY = os.environ["JIGSAW_PUBLIC_KEY"]
     
@@ -93,12 +83,141 @@ class RecruiterAgent():
 
         self.verbose = False
 
+        self.app = self.setup_agent()
+
+        self.setup_supabase()
+
         self.warmup()
 
     def warmup(self, ):
-        self.app = self.setup_agent()
-        self.app.invoke({"attachment": 'data/gettysburg.wav'})
-        self.app.invoke({"attachment": 'data/JohnDoeResume.pdf'})
+        try:
+            _resume_parser_test = self.app.invoke({"attachment": 'data/JohnDoeResume.pdf'})
+            _speech_parser_test = self.app.invoke({"attachment": 'data/gettysburg.wav'})
+            _speech_parser_test = self.app.invoke({"question": 'get_summary'})
+            _speech_parser_test = self.app.invoke({"question": 'what is the educationl history ?'})
+            # pdb.set_trace()
+        except:
+            traceback.print_exc()
+            pdb.set_trace()
+            _ = 'warmup'
+
+    # ------------------------------------------------------------
+    # Supabase
+    def setup_supabase(self, ):
+        self.supabase_client = create_client(
+            os.environ.get("SUPABASE_URL"),
+            os.environ.get("SUPABASE_KEY")
+        )
+        self.table_name = os.environ.get("SUPA_BASE_TABLE")
+        data_deleted, count = self.supabase_delete()
+        data_created, count = self.supabase_insert_new_record({"id": 1 , "resume_key": "resume_key"})
+        return
+        pdb.set_trace()
+        pprint(self.supabase_retrieve())
+        self.supabase_update_column(col_name="resume_key", col_value="JohnDoeResume.pdf")
+        self.supabase_update_column(col_name="resume_content", col_value="Name: JOHN DOE")
+        self.supabase_update_column(col_name="conversation_key", col_value=["call_v1.wav"])
+        self.supabase_update_column(col_name="conversation", col_value=["hello"])
+
+    def supabase_delete(self, ):
+        # delete the previous record with the same id
+        data, count = self.supabase_client\
+                        .table(self.table_name)\
+                        .delete()\
+                        .eq('id', 1)\
+                        .execute()
+        return data, count
+        """
+        data, count = self.supabase_client.table(self.table_name).delete().eq('id', 1).execute()
+
+        data
+            ('data', 
+            [
+                {   'created_at': '2024-06-08T09:05:44.470957+00:00',
+                    'id': 1,
+                    'name': 'JOHN DOE',
+                    'resume_content': 'Name: JOHN DOE\n'
+                                        '\n'...
+                                        'Certifications: Salt - SaltStack Certified Engineer, GCP '
+                                        '- Professional Cloud Architect\n'
+                                        '\n',
+                    'resume_key': 'sample_pdf_JOHN_DOE',
+                    'conversation_key': [str],
+                    'conversation': [str],
+                }
+            ]
+            )
+        """
+
+    def supabase_insert_new_record(self, response_dict):
+        """
+        response_dict = {
+            "id": 1 , 
+            "resume_key": file_name + "_" + new_name,
+            "name": name,
+            "resume_content": st,
+        }
+        """
+        #delete the previous record with the same id
+        data, count = self.supabase_client\
+                        .table(self.table_name)\
+                        .insert(response_dict)\
+                        .execute()
+        return data, count
+        """
+        response_dict = {"id": 1 , "resume_key": "resume_key"}
+        data, count = self.supabase_client.table(self.table_name).insert(response_dict).execute()
+        """
+
+    def supabase_retrieve(self, col_name='id', col_value=1):
+        """
+        Retrieve response from supabase database using the id and self.table_name
+        """
+        data_retrieved, count = self.supabase_client\
+                                    .table(self.table_name).select('*')\
+                                    .eq(col_name , col_value)\
+                                    .execute()
+        return data_retrieved[1][0]
+        # example of getting conversation from the response
+        conversation = data_retrieved[1][0]['conversation']
+        """
+        col_name='id';
+        col_value=1
+        data_retrieved, count = self.supabase_client.table(self.table_name).select('*').eq(col_name , col_value).execute()
+        data_retrieved = data_retrieved[1][0]
+        pprint(data_retrieved)
+        {
+            'conversation': ['95893583958935'],
+            'created_at': '2024-06-08T07:42:49.651779+00:00',
+            'id': 1,
+            'name': 'JOHN DOE',
+            'resume_content': 'Name: JOHN DOE\n'
+                            ...
+                            'Certifications: Salt - SaltStack Certified Engineer, GCP - '
+                            'Professional Cloud Architect\n'
+                            '\n',
+            'resume_key': 'sample_pdf_JOHN_DOE'}
+        """
+
+    def supabase_update_column(self, col_name, col_value):
+        """
+        Update response in the supabase database using the id and table_name
+        """
+        data, count = self.supabase_client\
+                        .table(self.table_name)\
+                        .update({col_name : col_value})\
+                        .eq('id', 1)\
+                        .execute()
+        return data
+        """
+        col_name = "conversation_key"
+        col_value = ["conversation_key_v1"]
+        data, count = self.supabase_client.table(self.table_name).update({col_name : col_value}).eq('id', 1).execute()
+
+        col_name = "conversation"
+        col_value = ["transcribed call 1"]
+        data, count = self.supabase_client.table(self.table_name).update({col_name : col_value}).eq('id', 1).execute()
+        """
 
     # ------------------------------------------------------------
     # Model
@@ -108,10 +227,17 @@ class RecruiterAgent():
         model_llama3_70b = "llama3-70b-8192"
         model_llama3_8b = "llama3-8b-8192"
         model_mixtral = "mixtral-8x7b-32768"
+        self.model_name = model_llama3_70b
 
-        GROQ_LLM = ChatGroq(model=model_llama3_8b,)
+        GROQ_LLM = ChatGroq(model=self.model_name,)
         print(f'\tUsing {GROQ_LLM.model_name}')
-        return GROQ_LLM
+
+        from groq import Groq
+        GROQ_v2 = Groq(
+            api_key=os.environ.get("GROQ_KEY"),
+        )
+
+        return GROQ_LLM, GROQ_v2
 
     # ------------------------------------------------------------
     # Tools
@@ -123,6 +249,7 @@ class RecruiterAgent():
     def JIGSAW_upload_resume_file(self, resume_file):
         resume_key = os.path.basename(resume_file).replace(' ', '_')
         assert resume_key.endswith('.pdf')
+        return resume_key, None
         # Define the endpoint and the API key
         #            <                endpoint               >
         #                                                      <      key     >
@@ -166,6 +293,7 @@ class RecruiterAgent():
     def JIGSAW_upload_speech_file(self, speech_file):
         speech_key = os.path.basename(speech_file).replace(' ', '_')
         assert speech_key.endswith('.wav')
+        return speech_key, None
         # Define the endpoint and the API key
         #            <                endpoint               >
         #                                                      <      key     >
@@ -195,6 +323,16 @@ class RecruiterAgent():
         {'success': True, 'url': 'https://api.jigsawstack.com/v1/store/file/gettysburg.wav', 'key': 'gettysburg.wav'}
 
     def JIGSAW_transcribe_file(self, speech_key):
+        return {
+            'success': True,
+            'text': ' four score and seven years ago our fathers brought forth on this continent a new nation conceived in liberty and dedicated to the proposition that all men are created equal now we are engaged in a great civil war testing whether that nation or any nation so conceived and so dedicated can long endure',
+            'chunks': [
+                {
+                    'timestamp': [0, 17.58],
+                    'text': ' four score and seven years ago our fathers brought forth on this continent a new nation conceived in liberty and dedicated to the proposition that all men are created equal now we are engaged in a great civil war testing whether that nation or any nation so conceived and so dedicated can long endure'
+                }
+            ]
+        }
         # Define the endpoint and the API key
         endpoint = "https://api.jigsawstack.com/v1/ai/transcribe"
         print(f"\tendpoint = {endpoint}")
@@ -240,7 +378,7 @@ class RecruiterAgent():
 
         # transcribe
         speech_transcribed = self.JIGSAW_transcribe_file(speech_key)
-        return speech_transcribed
+        return speech_key, speech_transcribed
 
     def setup_tools(self):
         self.python_repl_tool = self._tool_REPL()
@@ -300,6 +438,148 @@ The resume is given below:\n\n{resume_text}
             print(f"expected_answer = {expected_answer}")
             pdb.set_trace()
         return resume_parser_chain
+    def _chain_resume_parser_v2(self, resume_text):
+        print('\t _chain_resume_parser_v2')
+        return """
+Contact Information
+
+Name: John Doe
+Address: Simei Street 1, (520133)
+Email: John_Doe@hotmail.com
+LinkedIn: https://www.linkedin.com/in/john-doe-840510214
+Summary of Qualifications
+
+Experienced in designing solutions for environmental problems
+Proficient in various modeling and drafting software
+Efficiently manages projects and collaborates with teams
+Education
+
+Institution: Southeastern Louisiana University, Hammond, LA
+Degree: Bachelor of Science in Engineering Technology, Concentration: Electrical Energy Engineering
+Graduation Date: May 2024
+Cumulative GPA: 3.75/4.00
+Relevant Coursework:
+Introduction to Programming
+Electrical Circuits
+Electromagnetics
+Programming for Technologists
+Technical Proficiencies
+
+Modeling Programs:
+ALGOR
+eQUEST
+EnergyPro (LEED project with a VRF system)
+Drafting Software:
+AutoCAD
+AutoCAD LT
+Experience
+
+American Pollution Control Corp., Environmental Engineering Intern, Chalmette, LA (June 2023 - August 2023)
+Inspected sites and performed detailed monitoring of industrial pollution control measures
+Served on a committee dedicated to designing and implementing a new wastewater treatment system
+Investigated environmental projects onsite with a team of 3 engineers
+Cargill, Engineer Intern, Breaux Bridge, LA (May 2022 - August 2022)
+Researched building code items, materials, and similar building plans for 2 large commercial projects in New Orleans
+Reviewed building plans with engineering and design teams to evaluate for ADA compliance
+Collaborated with a team of 7 to research and identify suitable locations to install groundwater dams
+Project Experience
+
+Group Project, Senior Design Course, Hammond, LA (January - March 2023)
+Collaborated with a 5-person team to develop an action plan for addressing societal, environmental, regulatory, and economic constraints related to a local wastewater project
+Researched client needs and developed a solutions-based layout to best suit functionality requirements
+Served as project leader by organizing team meetings, tracking progress, and providing a forum for discussion
+Memberships and Associations
+
+The National Association of Environmental Professionals, Baton Rouge, LA (January 2020 - Present)
+Louisiana Association of Environmental Professionals (LAEP), Baton Rouge, LA (August 2020 - Present)
+Campus Involvement
+
+Co-Captain, SLU Tennis Team, Hammond, LA (August 2020 - May 2023)
+Member, Beta Gamma Sigma, SLU, Hammond, LA (December 2019 - December 2020)
+
+"""
+        
+        schema = {
+            "type":"object",
+            "properties": {
+                "name": {"type": "string",
+                        "description": "The name of the candidate"
+                        },
+                "contact_information": {"type": "string" ,
+                                        "description": "The contact information of the candidate. This should include the email address and phone number of the candidate. If the information is not present in the resume, just mention that the information is not present."
+                                        },
+                "summary": {"type": "string",
+                            "description": "The summary of the candidate. This should include a brief overview of the candidate's background and experience. If the information is not present in the resume, just mention that the information is not present."
+                            },
+                "work_experience": {"type": "string" , 
+                                    "description": "The work experience of the candidate"
+                                    },
+                "education": {"type": "string",
+                            "description": "The education of the candidate"
+                            },
+                "skills": {"type": "string",
+                        "skills": "The skills of the candidate"
+                        },
+                "certifications": {"type": "string",
+                                "description": "The certifications of the candidate"
+                                },
+                                
+            },
+        }
+        chat_completion = self.GROQ_v2.chat.completions.create(
+            messages=[
+                {
+                    "role": "system",
+                    "content": f"""
+You are a recruiter and you have received a resume from a candidate.
+You need to split the resume into the following sections:\n
+1. Name\n
+2. Contact Information\n
+3. Summary\n
+4. Work Experience\n
+5. Education\n
+6. Skills\n
+7. Certifications\n
+
+If the information is not present in the resume, just mention that the information is not present.
+
+Return a JSON object with the following schema: 
+{schema}
+.
+                    """,
+                },
+                {
+                    "role": "user",
+                    "content": f"The Resume is: \n\n{resume_text} ",
+                }
+            ],
+            model=self.model_name, # "llama3-70b-8192", 
+            response_format={"type": "json_object"}
+        )
+
+        output = chat_completion.choices[0].message.content
+
+        #process output as dict 
+        output_dict = eval(output)
+
+        name = output_dict['name']
+        contact_information = output_dict['contact_information']
+        summary = output_dict['summary']
+        work_experience = output_dict['work_experience']
+        education = output_dict['education']
+        skills = output_dict['skills']
+        certifications = output_dict['certifications']
+
+        st = ""
+        st = st + "Name: " + name + "\n\n"
+        st = st + "Contact Information: " + contact_information + "\n\n"
+        st = st + "Summary: " + summary + "\n\n"
+        st = st + "Work Experience: " + work_experience + "\n\n"
+        st = st + "Education: " + education + "\n\n"
+        st = st + "Skills: " + skills + "\n\n"
+        st = st + "Certifications: " + certifications + "\n\n"
+
+        return st
 
     def _chain_speech_parser(self, ):
         print('\t _chain_speech_parser')
@@ -386,6 +666,27 @@ Provide your final output in valid JSON format.
             print(f"expected_answer = {expected_answer}")
             pdb.set_trace()
         return speech_parser_chain
+    def _chain_speech_parser_v2(self, input):
+        print('\t _chain_speech_parser')
+        return """<json>
+- Name: John Doe 
+- Gender: Male
+- Languages: English
+- Country: US
+- Work Pass Type: visa
+- Nationality: American
+- Notice Period: 1 month
+- Reason for looking out: find new opportunities
+- Looking for in next move: promotion
+- Other Interviews in pipeline: 2 other in final stage
+- Current Salary: 100k 
+- Expected Salary: 200k
+- Identity: s123123d
+- Open to Consulting model: no
+- Current Annual Leave days: 19
+- Worked for Client Before or no: no
+</json>
+"""
 
     def _chain_question_answering(self, ):
         print('\t _chain_question_answering')
@@ -427,12 +728,17 @@ Finally, say: the above analysis of scratchpad and results is done
 
         question_answering_chain = prompt | self.GROQ_LLM | StrOutputParser()
         return question_answering_chain
+    def _chain_question_answering_v2(self, input):
+        return "<result>[your question is answered correcty]</result>"
 
     def setup_chains(self, ):
         print('\n--- setup_chains')
-        self.resume_parser_chain = self._chain_resume_parser()
-        self.speech_parser_chain = self._chain_speech_parser()
-        self.question_answering_chain = self._chain_question_answering()
+        # self.resume_parser_chain = self._chain_resume_parser()
+        self.resume_parser_chain_v2 = self._chain_resume_parser_v2
+        # self.speech_parser_chain = self._chain_speech_parser()
+        self.speech_parser_chain = self._chain_speech_parser_v2
+        # self.question_answering_chain = self._chain_question_answering()
+        self.question_answering_chain = self._chain_question_answering_v2
         # self. xxx _chain = self._chain_ xxx ()
         # self. xxx _chain = self._chain_ xxx ()
         return
@@ -467,10 +773,16 @@ Finally, say: the above analysis of scratchpad and results is done
         print(f'\tUploaded resume from {resume_path}')
         resume_text, resume_key = self.resume_parser_tool(resume_path)
         input_data = {"resume_text": resume_text}
-        resume_content = self.resume_parser_chain.invoke(input_data)
+        # resume_content = self.resume_parser_chain.invoke(input_data)
+        resume_content = self.resume_parser_chain_v2(input_data['resume_text'])
         print(f'\tresume_content = ')
         print(resume_content)
         self.state['resume_content'] = resume_content
+
+        # supabase
+        self.supabase_update_column(col_name="resume_key", col_value=resume_key)
+        self.supabase_update_column(col_name="resume_content", col_value=resume_content)
+
         return {
             "attachment": resume_path,
                 "resume_content": resume_content,
@@ -481,19 +793,25 @@ Finally, say: the above analysis of scratchpad and results is done
         speech_path = state['attachment']
         print(f'\tUploaded speech from {speech_path}')
 
-        speech_text = self.speech_parser_tool(speech_path)
+        speech_key, speech_text = self.speech_parser_tool(speech_path)
+        print(f'\tspeech_key = {speech_key}')
         speech_transcribed = speech_text['text']
         print(f'\tspeech_transcribed = ')
         print(speech_transcribed)
 
         input_data = {"speech_transcribed": speech_transcribed}
-        speech_keypoints = self.speech_parser_chain.invoke(input_data)
+        # speech_keypoints = self.speech_parser_chain.invoke(input_data)
+        speech_keypoints = self.speech_parser_chain(input_data)
         print(f'\tspeech_keypoints = ')
         print(speech_keypoints)
         speech_keypoints = self.process_xml_tags(speech_keypoints, tag='json')
         print(f'\tspeech_keypoints = ')
         print(speech_keypoints)
         self.state['speech_keypoints'] = speech_keypoints
+
+        # supabase
+        self.supabase_update_column(col_name="conversation_key", col_value=[speech_key])
+        self.supabase_update_column(col_name="conversation", col_value=[speech_transcribed])
         return {
             "attachment": speech_path,
                 "speech_transcribed": speech_transcribed,
@@ -514,6 +832,8 @@ Finally, say: the above analysis of scratchpad and results is done
                 self.dummy_data['speech_keypoints'] = speech_keypoints
 
         # store data into database here for RAG | supabase
+        # pprint(self.supabase_retrieve())
+        # pdb.set_trace()
 
         return {
             "answer": "",
@@ -557,7 +877,8 @@ Finally, say: the above analysis of scratchpad and results is done
         input_data = {"question": question,
                       "context": RAG_context,
                      }
-        answer_scratchpad_result = self.question_answering_chain.invoke(input_data)
+        # answer_scratchpad_result = self.question_answering_chain.invoke(input_data)
+        answer_scratchpad_result = self.question_answering_chain(input_data)
 
         # Parse answer
         answer = self.process_xml_tags(answer_scratchpad_result, tag='result')
@@ -627,7 +948,6 @@ Finally, say: the above analysis of scratchpad and results is done
 
     # ------------------------------------------------------------
     # UI/UX
-    @debug_on_error
     def respond(self, input_data, chatbot):
         # input_data = {"question": question}
         # input_data = {"attachment": 'resume.pdf'}
