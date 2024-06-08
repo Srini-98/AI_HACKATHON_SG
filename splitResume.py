@@ -12,6 +12,10 @@ def setup():
 from groq import Groq
 
 def get_response(resume , file_name):
+    """
+    resume : text of resume
+    file_name : will be the key
+    """
 
     #get supanase client for pushing data into the database
     supabase_client = setup()
