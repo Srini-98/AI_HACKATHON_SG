@@ -1,0 +1,22 @@
+jupyterlab==4.2.1
+python-dotenv==1.0.1
+
+groq==0.8.0
+langchain-groq==0.1.4
+langchain-community==0.2.1
+tiktoken==0.7.0
+huggingface-hub==0.23.2
+langchainhub==0.1.17
+langgraph==0.0.56
+langchain==0.2.1
+langchain-chroma==0.1.1
+
+# duckduckgo_search==6.1.2
+tavily-python==0.3.3
+
+sentence-transformers==3.0.0
+
+# streamlit==1.35.0
+gradio==4.32.1
+PyPDF2==3.0.1
+
