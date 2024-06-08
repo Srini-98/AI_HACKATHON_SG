@@ -110,12 +110,16 @@ def get_response(resume , file_name):
 
     #push the response to the database
     response = {
-        "id" : 1,
+        "id": 1 , 
         "resume_key": file_name + "_" + new_name,
         "name": name,
         "resume_content": st,
     }
 
-    data, count = supabase_client.table(table_name).insert(response).execute()
+    #delete the previous record with the same id
+    data, count = supabase.table(table_name).delete().eq('id', 1).execute()
 
+    #insert the new record
+    data, count = supabase_client.table(table_name).insert(response).execute()
+    
     return st
