@@ -6,7 +6,7 @@ from groq import Groq
 
 def generate_job_description(resume: str) -> str:
     """
-    This function uses the Hyde technique where we take a candidates resume and generate a job description for which he will be suiable for.
+    This function uses the Hyde technique where we take a candidates resume and generate a job description for which he will be suitable for.
     """
 
     client = Groq(
